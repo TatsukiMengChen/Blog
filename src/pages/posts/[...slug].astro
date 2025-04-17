@@ -8,7 +8,7 @@ import MainGridLayout from "@layouts/MainGridLayout.astro";
 import { getSortedPosts } from "@utils/content-utils";
 import { getDir, getPostUrlBySlug } from "@utils/url-utils";
 import { Icon } from "astro-icon/components";
-import { licenseConfig } from "src/config";
+import { licenseConfig, walineConfig } from "src/config";
 import ImageWrapper from "../../components/misc/ImageWrapper.astro";
 import PostMetadata from "../../components/PostMeta.astro";
 import { profileConfig, siteConfig } from "../../config";
@@ -119,6 +119,22 @@ const jsonLd = {
 
             {licenseConfig.enable && <License title={entry.data.title} slug={entry.slug} pubDate={entry.data.published} class="mb-6 rounded-xl license-container onload-animation"></License>}
 
+            <!-- Waline -->
+            {entry.data.comments !== false && (
+                <>
+                    <link rel="stylesheet" href="/css/waline.css" />
+                    <div id="waline" class="mb-8" />
+                    <script type="module" is:inline define:vars={{ walineConfig }}>
+                    import { init } from '/js/waline.js';
+                    init({
+                        el: '#waline',
+                        serverURL: walineConfig.serverURL,
+                        login: walineConfig.login,
+                        path: location.pathname,
+                    });
+                    </script>
+                </>
+            )}
         </div>
     </div>
 
