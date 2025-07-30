@@ -26,6 +26,8 @@ export type SiteConfig = {
 	};
 
 	favicon: Favicon[];
+
+	enablePostViews: boolean;
 };
 
 export type Favicon = {

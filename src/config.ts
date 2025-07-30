@@ -40,6 +40,7 @@ export const siteConfig: SiteConfig = {
 			src: "favicon/logo.png",
 		},
 	],
+	enablePostViews: true, // Enable post views count
 };
 
 export const navBarConfig: NavBarConfig = {

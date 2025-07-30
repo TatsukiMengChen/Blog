@@ -44,6 +44,22 @@ const jsonLd = {
 		: siteConfig.lang.replace("_", "-"),
 	// TODO include cover image here
 };
+
+async function getPostViews(slug: string): Promise<number> {
+	const url = `${import.meta.env.PUBLIC_COUNTER_URL}${getPostUrlBySlug(slug)}`;
+	return await fetch(url, {
+		method: "POST",
+		headers: {
+			"Content-Type": "application/json",
+		},
+	}).then(async (response) => {
+		if (!response.ok) {
+			throw new Error("Failed to fetch post views");
+		}
+		const data: { views: number } = await response.json();
+		return data.views;
+	});
+}
 ---
 <MainGridLayout banner={entry.data.image} title={entry.data.title} description={entry.data.description} lang={entry.data.lang} setOGTypeArticle={true} headings={headings}>
     <script is:inline slot="head" type="application/ld+json" set:html={JSON.stringify(jsonLd)}></script>
@@ -67,6 +83,17 @@ const jsonLd = {
                         {remarkPluginFrontmatter.minutes} {" " + i18n(remarkPluginFrontmatter.minutes === 1 ? I18nKey.minuteCount : I18nKey.minutesCount)}
                     </div>
                 </div>
+                <!-- views -->
+                {siteConfig.enablePostViews && (
+                    <div class="flex flex-row items-center">
+                        <div class="transition h-6 w-6 rounded-md bg-black/5 dark:bg-white/10 text-black/50 dark:text-white/50 flex items-center justify-center mr-2">
+                            <Icon name="material-symbols:visibility-outline-rounded"></Icon>
+                        </div>
+                        <div class="text-sm">
+                            {await getPostViews(entry.slug)} {" " + i18n(I18nKey.viewsCount)}
+                        </div>
+                    </div>
+                )}
             </div>
 
             <!-- title -->

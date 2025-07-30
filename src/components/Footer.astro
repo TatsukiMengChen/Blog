@@ -1,9 +1,18 @@
 ---
 
-import { profileConfig } from "../config";
+import { getCollection } from "astro:content";
+import { getPostUrlBySlug } from "@utils/url-utils";
+import { profileConfig, siteConfig } from "../config";
 import { url } from "../utils/url-utils";
 
 const currentYear = new Date().getFullYear();
+
+// 获取所有文章的URL
+let allPostUrls: string[] = [];
+if (siteConfig.enablePostViews) {
+	const posts = await getCollection("posts");
+	allPostUrls = posts.map((post) => getPostUrlBySlug(post.slug));
+}
 ---
 
 <!--<div class="border-t border-[var(&#45;&#45;primary)] mx-16 border-dashed py-8 max-w-[var(&#45;&#45;page-width)] flex flex-col items-center justify-center px-6">-->
@@ -14,8 +23,181 @@ const currentYear = new Date().getFullYear();
         &copy; <span id="copyright-year">{currentYear}</span> {profileConfig.name}. All Rights Reserved. /
         <a class="transition link text-[var(--primary)] font-medium" target="_blank" href={url('rss.xml')}>RSS</a> /
         <a class="transition link text-[var(--primary)] font-medium" target="_blank" href={url('sitemap-index.xml')}>Sitemap</a><br>
+        {siteConfig.enablePostViews && (
+            <span class="inline-flex items-center gap-2">
+                <span class="transition hidden" id="blog-views-label">
+                    博客访问量：<span id="blog-views">0</span> 次访问 | 文章总阅读量：<span id="total-post-views">0</span> 次阅读
+                </span>
+            </span>
+        )}<br>
         Powered by
         <a class="transition link text-[var(--primary)] font-medium" target="_blank" href="https://astro.build">Astro</a> &
         <a class="transition link text-[var(--primary)] font-medium" target="_blank" href="https://github.com/saicaca/fuwari">Fuwari</a>
     </div>
 </div>
+
+<script define:vars={{ allPostUrls, counterUrl: import.meta.env.PUBLIC_COUNTER_URL }}>
+    // 获取博客总访问量，客户端执行
+    async function getBlogViews() {
+        // 检查是否已经有缓存的访问量数据
+        const cachedViews = sessionStorage.getItem('blog-views-cache');
+        if (cachedViews) {
+            return parseInt(cachedViews, 10);
+        }
+        
+        // 检查 sessionStorage 是否已经记录了本次访问
+        const hasPostedThisSession = sessionStorage.getItem('blog-visit-posted') === 'true';
+        
+        let res;
+        if (!hasPostedThisSession) {
+            // 第一次访问，POST 请求并记录到 sessionStorage
+            sessionStorage.setItem('blog-visit-posted', 'true');
+            res = await fetch(`${counterUrl}/visitCount`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+            });
+        } else {
+            // 非第一次访问，GET 请求
+            res = await fetch(`${counterUrl}/visitCount`, {
+                method: "GET",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+            });
+        }
+        
+        if (!res.ok) return 0;
+        const data = await res.json();
+        
+        // 缓存访问量数据
+        sessionStorage.setItem('blog-views-cache', data.views.toString());
+        
+        return data.views;
+    }
+
+    // 获取所有文章的总阅读量
+    async function getTotalPostViews() {
+        // 检查是否已经有缓存的文章总阅读量数据
+        const cachedTotalViews = sessionStorage.getItem('total-post-views-cache');
+        if (cachedTotalViews) {
+            return parseInt(cachedTotalViews, 10);
+        }
+        
+        try {
+            // 使用 batch 接口获取所有文章的阅读量，传入所有文章的URL
+            const res = await fetch(`${counterUrl}/batch`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(allPostUrls), // 传入所有文章的URL数组
+            });
+            
+            if (!res.ok) return 0;
+            const data = await res.json();
+            
+            // 计算所有文章的总阅读量
+            let totalViews = 0;
+            for (const views of Object.values(data)) {
+                if (typeof views === 'number') {
+                    totalViews += views;
+                }
+            }
+            
+            // 缓存文章总阅读量数据
+            sessionStorage.setItem('total-post-views-cache', totalViews.toString());
+            
+            return totalViews;
+        } catch (error) {
+            console.error('Failed to fetch total post views:', error);
+            return 0;
+        }
+    }
+
+    // 防抖标志
+    let isUpdating = false;
+
+    // 更新访问量显示的函数（带防抖）
+    async function updateBlogViews() {
+        // 如果正在更新，则忽略这次调用
+        if (isUpdating) {
+            return;
+        }
+        
+        isUpdating = true;
+        
+        try {
+            const viewsElement = document.getElementById('blog-views');
+            const totalPostViewsElement = document.getElementById('total-post-views');
+            
+            if (viewsElement) {
+                // 先检查缓存，如果有缓存则立即显示
+                const cachedViews = sessionStorage.getItem('blog-views-cache');
+                if (cachedViews) {
+                    viewsElement.textContent = cachedViews;
+                    const viewsLabel = document.getElementById('blog-views-label');
+                    if (viewsLabel) {
+                        viewsLabel.classList.remove('hidden');
+                    }
+                }
+                
+                try {
+                    const views = await getBlogViews();
+                    viewsElement.textContent = views.toString();
+                } catch (error) {
+                    console.error('Failed to fetch blog views:', error);
+                    // 如果没有缓存且请求失败，显示 0
+                    if (!cachedViews) {
+                        viewsElement.textContent = '0';
+                    }
+                }
+            }
+            
+            if (totalPostViewsElement) {
+                // 先检查缓存，如果有缓存则立即显示
+                const cachedTotalViews = sessionStorage.getItem('total-post-views-cache');
+                if (cachedTotalViews) {
+                    totalPostViewsElement.textContent = cachedTotalViews;
+                }
+                
+                try {
+                    const totalViews = await getTotalPostViews();
+                    totalPostViewsElement.textContent = totalViews.toString();
+                } catch (error) {
+                    console.error('Failed to fetch total post views:', error);
+                    // 如果没有缓存且请求失败，显示 0
+                    if (!cachedTotalViews) {
+                        totalPostViewsElement.textContent = '0';
+                    }
+                }
+            }
+            
+            const viewsLabel = document.getElementById('blog-views-label');
+            if (viewsLabel) {
+                viewsLabel.classList.remove('hidden');
+            }
+        } finally {
+            isUpdating = false;
+        }
+    }
+
+    
+    // 页面加载完成时清除缓存并更新访问量（只触发一次）
+    document.addEventListener('DOMContentLoaded', () => {
+        // 清除所有缓存，确保获取最新数据
+        sessionStorage.removeItem('blog-views-cache');
+        sessionStorage.removeItem('total-post-views-cache');
+        sessionStorage.removeItem('blog-visit-posted');
+        
+        // 更新访问量显示
+        updateBlogViews();
+    });
+    
+    // 监听 Astro 的路由变化事件（适用于 SPA 导航）
+    document.addEventListener('astro:page-load', updateBlogViews);
+    
+    // 备用：监听 popstate 事件（浏览器前进/后退）
+    window.addEventListener('popstate', updateBlogViews);
+</script>
