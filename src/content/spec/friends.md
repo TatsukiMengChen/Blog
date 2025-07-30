@@ -20,6 +20,13 @@ friends: [
         desc: "一只茄子",
         tags: ["男神", "🍆"],
         url: "https://auberginewly.site"
+    },
+    {
+        avatar: "https://avatars.githubusercontent.com/u/177809507",
+        name: "回归天空",
+        desc: "为什么跟女生交流的时候没有选项！！！",
+        tags: ["Galgame","二次元", "Bot 爱好者"],
+        url: "https://sxp-simon.github.io/HelianNuits"
     }
 ]
 title: "Friends"
