@@ -16,11 +16,11 @@ interface Props {
 const { name, avatar, desc, url, tags = [], class: className } = Astro.props;
 ---
 
-<div class:list={["flex flex-nowrap items-stretch h-28 gap-4 rounded-[var(--radius-large)]", className]}>
-    <div class="w-28 h-28 flex-shrink-0 rounded-lg overflow-hidden bg-zinc-200 dark:bg-zinc-900">
+<div class:list={["flex flex-nowrap items-stretch overflow-hidden h-28 gap-4 rounded-xl bg-[var(--card-bg)] hover:bg-[var(--btn-card-bg-hover)] border border-[var(--btn-card-bg-active)]", className]}>
+    <div class="h-full flex-shrink-0 overflow-hidden bg-zinc-200 dark:bg-zinc-900">
         <img src={avatar} alt={`${name}站点头像`} class="w-full h-full object-cover">
     </div>
-    <div class="grow w-full flex flex-col justify-between">
+    <div class="grow w-full flex flex-col justify-between my-2">
         <div class="font-bold transition text-lg text-neutral-900 dark:text-neutral-100">{name}</div>
         <div class="text-50 text-sm font-medium flex-1 flex items-center">{desc}</div>
         <div class="flex items-center">
@@ -35,7 +35,7 @@ const { name, avatar, desc, url, tags = [], class: className } = Astro.props;
             </div>
         </div>
     </div>
-    <a href={url} target="_blank" rel="noopener noreferrer" class="flex btn-regular w-[3.25rem] rounded-lg bg-[var(--enter-btn-bg)] hover:bg-[var(--enter-btn-bg-hover)] active:bg-[var(--enter-btn-bg-active)] active:scale-95">
+    <a href={url} target="_blank" rel="noopener noreferrer" class="flex btn-regular w-[3.25rem] bg-[var(--enter-btn-bg)] hover:bg-[var(--enter-btn-bg-hover)] active:bg-[var(--enter-btn-bg-active)]">
         <Icon name="material-symbols:chevron-right-rounded"
             class="transition text-[var(--primary)] text-4xl mx-auto">
         </Icon>
