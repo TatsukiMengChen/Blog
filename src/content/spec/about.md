@@ -27,7 +27,7 @@
 ::github{repo="TatsukiMengChen/FrontendArchive"}
 
 - **低配版小红书**
-::github{repo="TripOffer/TripDiry-FE"}
+::github{repo="TripOffer/trip-diary-fe"}
 
 - **构音康复训练 APP**
 ::github{repo="TatsukiMengChen/CongYan"}
