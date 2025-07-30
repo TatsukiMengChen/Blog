@@ -74,7 +74,7 @@ const jsonLd = {
                             <Icon name="material-symbols:visibility-outline-rounded"></Icon>
                         </div>
                         <div class="text-sm">
-                            <span id="post-views">0</span> {" " + i18n(I18nKey.viewsCount)}
+                            <span data-post-detail-views>0</span> {" " + i18n(I18nKey.viewsCount)}
                         </div>
                     </div>
                 )}
@@ -152,103 +152,13 @@ const jsonLd = {
     enablePostViews: siteConfig.enablePostViews,
     postUrl: getPostUrlBySlug(entry.slug)
 }}>
-    // 使用全局变量来防抖
-    if (!window.postDetailViewsState) {
-        window.postDetailViewsState = {
-            isUpdating: false,
-            debounceTimer: null
-        };
-    }
-
-    // 获取并更新文章访问量
-    async function getAndUpdatePostViews() {
-        if (!enablePostViews) {
-            return;
-        }
-
-        // 如果正在更新，则忽略这次调用
-        if (window.postDetailViewsState.isUpdating) {
-            return;
-        }
-
-        // 清除之前的防抖定时器
-        if (window.postDetailViewsState.debounceTimer) {
-            clearTimeout(window.postDetailViewsState.debounceTimer);
-        }
-
-        // 设置1秒防抖
-        window.postDetailViewsState.debounceTimer = setTimeout(async () => {
-            // 检查当前页面的 URL 是否匹配这篇文章的 URL
-            const currentPath = window.location.pathname;
-            if (currentPath !== postUrl) {
-                return; // 当前页面不是这篇文章，不进行更新
-            }
-
-            window.postDetailViewsState.isUpdating = true;
-
-            try {
-                // 首先尝试从 Footer 组件缓存的数据中获取访问量
-                const cachedBatchData = sessionStorage.getItem('total-post-views-cache');
-                let viewsFromCache = null;
-                
-                if (cachedBatchData) {
-                    // 如果有缓存的批量数据，尝试从中提取当前文章的访问量
-                    // 注意：这里需要从 Footer 的 batch 请求结果中提取
-                    const batchCacheKey = 'post-views-batch-cache';
-                    const batchData = sessionStorage.getItem(batchCacheKey);
-                    if (batchData) {
-                        try {
-                            const parsed = JSON.parse(batchData);
-                            viewsFromCache = parsed[postUrl];
-                        } catch (e) {
-                            console.warn('Failed to parse batch cache data:', e);
-                        }
-                    }
-                }
-
-                // 如果有缓存的访问量，直接使用
-                if (viewsFromCache !== null && typeof viewsFromCache === 'number') {
-                    const viewsElement = document.getElementById('post-views');
-                    if (viewsElement) {
-                        viewsElement.textContent = viewsFromCache.toString();
-                    }
-                    return; // 使用缓存数据，不发送新请求
-                }
-
-                // 如果没有缓存数据，发送 POST 请求来增加访问量并获取当前访问量
-                const url = `${counterUrl}${postUrl}`;
-                const res = await fetch(url, {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                    },
-                });
-
-                if (!res.ok) {
-                    throw new Error("Failed to fetch post views");
-                }
-
-                const data = await res.json();
-                const viewsElement = document.getElementById('post-views');
-                if (viewsElement && typeof data.views === 'number') {
-                    viewsElement.textContent = data.views.toString();
-                }
-            } catch (error) {
-                console.error('Failed to fetch post views:', error);
-                // 失败时保持默认值 0
-            } finally {
-                window.postDetailViewsState.isUpdating = false;
-            }
-        }, 1000);
-    }
-
     // 立即从缓存中读取并显示访问量
     function loadViewsFromCache() {
         if (!enablePostViews) {
             return;
         }
 
-        const viewsElement = document.getElementById('post-views');
+        const viewsElement = document.querySelector('[data-post-detail-views]');
         if (!viewsElement) {
             return;
         }
@@ -269,26 +179,46 @@ const jsonLd = {
         }
     }
 
+    // 监听来自 Footer 的访问量更新事件
+    function listenForViewsUpdate() {
+        // 监听 Footer 更新批量缓存的事件
+        const checkForUpdates = () => {
+            const currentPath = window.location.pathname;
+            if (currentPath === postUrl) {
+                loadViewsFromCache();
+            }
+        };
+
+        // 定期检查缓存更新
+        const updateInterval = setInterval(checkForUpdates, 1000);
+        
+        // 存储定时器，便于清理
+        if (!window.postDetailCleanup) {
+            window.postDetailCleanup = [];
+        }
+        window.postDetailCleanup.push(() => clearInterval(updateInterval));
+    }
+
     // 立即尝试从缓存加载数据
     loadViewsFromCache();
 
-    // 使用更简洁的事件监听，主要依赖 Footer 的全局轮询
+    // 页面加载完成时设置监听
     document.addEventListener('DOMContentLoaded', () => {
         loadViewsFromCache();
-        getAndUpdatePostViews();
+        listenForViewsUpdate();
     });
     
-    // 监听 Astro 的路由变化事件（备用）
+    // 监听 Astro 的路由变化事件
     document.addEventListener('astro:page-load', () => {
         loadViewsFromCache();
-        getAndUpdatePostViews();
+        listenForViewsUpdate();
     });
 
-    // 监听 popstate 事件（浏览器前进/后退，备用）
-    window.addEventListener('popstate', () => {
-        setTimeout(() => {
-            loadViewsFromCache();
-            getAndUpdatePostViews();
-        }, 100);
+    // 页面卸载时清理定时器
+    window.addEventListener('beforeunload', () => {
+        if (window.postDetailCleanup) {
+            window.postDetailCleanup.forEach(cleanup => cleanup());
+            window.postDetailCleanup = [];
+        }
     });
 </script>

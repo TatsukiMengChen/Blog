@@ -40,7 +40,9 @@ if (siteConfig.enablePostViews) {
     // 使用全局变量来防抖
     if (!window.footerViewsState) {
         window.footerViewsState = {
-            isUpdating: false
+            isUpdating: false,
+            incrementingPosts: new Set(), // 记录正在增加访问量的文章路径
+            incrementDebounceTimers: new Map() // 记录防抖定时器
         };
     }
 
@@ -79,8 +81,7 @@ if (siteConfig.enablePostViews) {
         const data = await res.json();
         
         // 缓存访问量数据
-        sessionStorage.setItem('blog-views-cache', data.views.toString());
-        
+        sessionStorage.setItem('blog-views-cache', data.views.toString());;
         return data.views;
     }
 
@@ -115,10 +116,9 @@ if (siteConfig.enablePostViews) {
             
             // 缓存文章总阅读量数据
             sessionStorage.setItem('total-post-views-cache', totalViews.toString());
-            
+            sessionStorage.setItem('post-views-batch-cache', JSON.stringify(data)); // 缓存批量数据
             return totalViews;
         } catch (error) {
-            console.error('Failed to fetch total post views:', error);
             return 0;
         }
     }
@@ -151,7 +151,6 @@ if (siteConfig.enablePostViews) {
                     const views = await getBlogViews();
                     viewsElement.textContent = views.toString();
                 } catch (error) {
-                    console.error('Failed to fetch blog views:', error);
                     // 如果没有缓存且请求失败，显示 0
                     if (!cachedViews) {
                         viewsElement.textContent = '0';
@@ -170,7 +169,6 @@ if (siteConfig.enablePostViews) {
                     const totalViews = await getTotalPostViews();
                     totalPostViewsElement.textContent = totalViews.toString();
                 } catch (error) {
-                    console.error('Failed to fetch total post views:', error);
                     // 如果没有缓存且请求失败，显示 0
                     if (!cachedTotalViews) {
                         totalPostViewsElement.textContent = '0';
@@ -187,15 +185,90 @@ if (siteConfig.enablePostViews) {
         }
     }
 
+    // 给指定文章增加访问量计数
+    async function incrementPostViews(postPath) {
+        // 检查是否已经为当前会话的这篇文章增加过访问量
+        const sessionKey = `post-visit-${postPath}`;
+        const hasIncrementedThisSession = sessionStorage.getItem(sessionKey) === 'true';
+        
+        if (hasIncrementedThisSession) {
+            return; // 本次会话已经增加过访问量，不重复增加
+        }
+        
+        // 防抖：检查是否正在为这篇文章增加访问量
+        if (window.footerViewsState.incrementingPosts.has(postPath)) {
+            return; // 正在处理中，避免重复请求
+        }
+        
+        // 清除之前的防抖定时器
+        const existingTimer = window.footerViewsState.incrementDebounceTimers.get(postPath);
+        if (existingTimer) {
+            clearTimeout(existingTimer);
+        }
+        
+        // 设置1秒防抖
+        const debounceTimer = setTimeout(async () => {
+            // 标记开始处理这篇文章
+            window.footerViewsState.incrementingPosts.add(postPath);
+            
+            try {
+                const url = `${counterUrl}${postPath}`;
+                const res = await fetch(url, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                });
+                
+                if (res.ok) {
+                    const data = await res.json();
+                    // 标记本次会话已经为这篇文章增加过访问量
+                    sessionStorage.setItem(sessionKey, 'true');
+                    
+                    // 更新页面上的访问量显示
+                    const postViewsElement = document.querySelector('[data-post-detail-views]');
+                    if (postViewsElement && typeof data.views === 'number') {
+                        postViewsElement.textContent = data.views.toString();
+                    }
+                    
+                    // 更新批量缓存中的数据
+                    const batchCacheData = sessionStorage.getItem('post-views-batch-cache');
+                    if (batchCacheData) {
+                        try {
+                            const parsed = JSON.parse(batchCacheData);
+                            parsed[postPath] = data.views;
+                            sessionStorage.setItem('post-views-batch-cache', JSON.stringify(parsed));
+                        } catch (e) {
+                            // Failed to update batch cache
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to increment post views:', error);
+            } finally {
+                // 移除处理标记和定时器
+                window.footerViewsState.incrementingPosts.delete(postPath);
+                window.footerViewsState.incrementDebounceTimers.delete(postPath);
+            }
+        }, 1000);
+        
+        // 存储定时器
+        window.footerViewsState.incrementDebounceTimers.set(postPath, debounceTimer);
+    }
+
     // 全局路径变化监听和页面访问量更新函数
     function updatePageSpecificViews() {
         const currentPath = window.location.pathname;
         
         // 检查是否是文章详情页
         if (currentPath.startsWith('/posts/')) {
+            
+            // 先立即尝试增加访问量计数（不依赖元素存在）
+            incrementPostViews(currentPath);
+            
             // 延迟查找元素，因为页面可能还在加载
             const tryUpdateDetailPage = (retryCount = 0) => {
-                const postViewsElement = document.getElementById('post-views');
+                const postViewsElement = document.querySelector('[data-post-detail-views]');
                 
                 if (postViewsElement) {
                     const batchData = sessionStorage.getItem('post-views-batch-cache');
@@ -209,12 +282,12 @@ if (siteConfig.enablePostViews) {
                                 postViewsElement.textContent = cachedViews.toString();
                             }
                         } catch (e) {
-                            console.warn('Failed to parse batch cache data:', e);
+                            // Failed to parse batch cache data
                         }
                     }
                 } else if (retryCount < 10) {
-                    // 如果元素还没找到，延迟100ms后重试，最多重试10次
-                    setTimeout(() => tryUpdateDetailPage(retryCount + 1), 100);
+                    // 如果元素还没找到，延迟1秒后重试，最多重试10次
+                    setTimeout(() => tryUpdateDetailPage(retryCount + 1), 1000);
                 }
             };
             
@@ -237,7 +310,7 @@ if (siteConfig.enablePostViews) {
                         }
                     });
                 } catch (e) {
-                    console.warn('Failed to parse batch cache data:', e);
+                    // Failed to parse batch cache data
                 }
             }
         }
@@ -250,6 +323,21 @@ if (siteConfig.enablePostViews) {
         sessionStorage.removeItem('blog-views-cache');
         sessionStorage.removeItem('total-post-views-cache');
         sessionStorage.removeItem('blog-visit-posted');
+        
+        // 清除所有文章访问计数的会话标记
+        Object.keys(sessionStorage).forEach(key => {
+            if (key.startsWith('post-visit-')) {
+                sessionStorage.removeItem(key);
+            }
+        });
+        
+        // 清除处理状态
+        if (window.footerViewsState) {
+            window.footerViewsState.incrementingPosts.clear();
+            // 清除所有防抖定时器
+            window.footerViewsState.incrementDebounceTimers.forEach(timer => clearTimeout(timer));
+            window.footerViewsState.incrementDebounceTimers.clear();
+        }
         
         // 更新访问量显示
         updateBlogViews();

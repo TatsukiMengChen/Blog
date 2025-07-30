@@ -89,7 +89,8 @@ const postUrls = page.data.map((entry: CollectionEntry<"posts">) =>
 
             try {
                 const postViews = await getBatchPostViews(postUrls);
-                
+                // 将批量获取的访问量数据缓存到 sessionStorage，供文章详情页使用
+                sessionStorage.setItem('post-views-batch-cache', JSON.stringify(postViews));
                 // 使用 data-url 属性直接查找对应的访问量元素并更新
                 Object.entries(postViews).forEach(([url, views]) => {
                     const viewsElement = document.querySelector(`[data-post-views][data-url="${url}"]`);
