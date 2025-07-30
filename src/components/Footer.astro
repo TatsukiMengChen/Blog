@@ -37,6 +37,13 @@ if (siteConfig.enablePostViews) {
 </div>
 
 <script define:vars={{ allPostUrls, counterUrl: import.meta.env.PUBLIC_COUNTER_URL }}>
+    // 使用全局变量来防抖
+    if (!window.footerViewsState) {
+        window.footerViewsState = {
+            isUpdating: false
+        };
+    }
+
     // 获取博客总访问量，客户端执行
     async function getBlogViews() {
         // 检查是否已经有缓存的访问量数据
@@ -116,17 +123,14 @@ if (siteConfig.enablePostViews) {
         }
     }
 
-    // 防抖标志
-    let isUpdating = false;
-
     // 更新访问量显示的函数（带防抖）
     async function updateBlogViews() {
         // 如果正在更新，则忽略这次调用
-        if (isUpdating) {
+        if (window.footerViewsState.isUpdating) {
             return;
         }
         
-        isUpdating = true;
+        window.footerViewsState.isUpdating = true;
         
         try {
             const viewsElement = document.getElementById('blog-views');
@@ -179,7 +183,63 @@ if (siteConfig.enablePostViews) {
                 viewsLabel.classList.remove('hidden');
             }
         } finally {
-            isUpdating = false;
+            window.footerViewsState.isUpdating = false;
+        }
+    }
+
+    // 全局路径变化监听和页面访问量更新函数
+    function updatePageSpecificViews() {
+        const currentPath = window.location.pathname;
+        
+        // 检查是否是文章详情页
+        if (currentPath.startsWith('/posts/')) {
+            // 延迟查找元素，因为页面可能还在加载
+            const tryUpdateDetailPage = (retryCount = 0) => {
+                const postViewsElement = document.getElementById('post-views');
+                
+                if (postViewsElement) {
+                    const batchData = sessionStorage.getItem('post-views-batch-cache');
+                    
+                    if (batchData) {
+                        try {
+                            const parsed = JSON.parse(batchData);
+                            const cachedViews = parsed[currentPath];
+                            
+                            if (typeof cachedViews === 'number') {
+                                postViewsElement.textContent = cachedViews.toString();
+                            }
+                        } catch (e) {
+                            console.warn('Failed to parse batch cache data:', e);
+                        }
+                    }
+                } else if (retryCount < 10) {
+                    // 如果元素还没找到，延迟100ms后重试，最多重试10次
+                    setTimeout(() => tryUpdateDetailPage(retryCount + 1), 100);
+                }
+            };
+            
+            tryUpdateDetailPage();
+        }
+        
+        // 检查是否是文章列表页，更新列表中的访问量
+        const postViewElements = document.querySelectorAll('[data-post-views]');
+        
+        if (postViewElements.length > 0) {
+            const batchData = sessionStorage.getItem('post-views-batch-cache');
+            
+            if (batchData) {
+                try {
+                    const parsed = JSON.parse(batchData);
+                    postViewElements.forEach((element, index) => {
+                        const url = element.getAttribute('data-url');
+                        if (url && typeof parsed[url] === 'number') {
+                            element.textContent = parsed[url].toString();
+                        }
+                    });
+                } catch (e) {
+                    console.warn('Failed to parse batch cache data:', e);
+                }
+            }
         }
     }
 
@@ -193,6 +253,34 @@ if (siteConfig.enablePostViews) {
         
         // 更新访问量显示
         updateBlogViews();
+        updatePageSpecificViews();
+        
+        // 启动全局路径监听轮询
+        let lastPath = window.location.pathname;
+        let globalPathCheckInterval = setInterval(() => {
+            const currentPath = window.location.pathname;
+            if (currentPath !== lastPath) {
+                lastPath = currentPath;
+                
+                // 路径变化时更新对应页面的访问量显示
+                updatePageSpecificViews();
+                
+                // 如果是文章列表页，可能需要重新获取批量数据
+                if (currentPath === '/' || currentPath.includes('/archive') || currentPath.includes('/page/')) {
+                    // 延迟一点时间让页面加载完成
+                    setTimeout(() => {
+                        const hasPostViews = document.querySelector('[data-post-views]');
+                        if (hasPostViews && !window.postPageViewsState?.isUpdating) {
+                            // 触发文章列表页的访问量更新
+                            window.dispatchEvent(new CustomEvent('triggerPostPageUpdate'));
+                        }
+                    }, 100);
+                }
+            }
+        }, 500); // 每500ms检查一次路径变化
+        
+        // 将定时器存储到全局变量，避免重复创建
+        window.globalPathCheckInterval = globalPathCheckInterval;
     });
     
     // 监听 Astro 的路由变化事件（适用于 SPA 导航）

@@ -10,30 +10,9 @@ const { page } = Astro.props;
 let delay = 0;
 const interval = 50;
 
-// 批量获取阅读数
-async function getBatchPostViews(
-	urls: string[],
-): Promise<Record<string, number>> {
-	const counterUrl = import.meta.env.PUBLIC_COUNTER_URL;
-	const res = await fetch(`${counterUrl}/batch`, {
-		method: "POST",
-		headers: {
-			"Content-Type": "application/json",
-		},
-		body: JSON.stringify(urls),
-	});
-	if (!res.ok) throw new Error("Failed to fetch batch post views");
-	return await res.json();
-}
-
 const postUrls = page.data.map((entry: CollectionEntry<"posts">) =>
 	getPostUrlBySlug(entry.slug),
 );
-
-let postViews: Record<string, number> = {};
-if (siteConfig.enablePostViews) {
-	postViews = await getBatchPostViews(postUrls);
-}
 ---
 <div class="transition flex flex-col rounded-[var(--radius-large)] bg-[var(--card-bg)] py-1 md:py-0 md:bg-transparent md:gap-4 mb-4">
     {page.data.map((entry: CollectionEntry<"posts">, idx: number) => (
@@ -48,9 +27,87 @@ if (siteConfig.enablePostViews) {
             image={entry.data.image}
             description={entry.data.description}
             draft={entry.data.draft}
-            views={postViews[postUrls[idx]] ?? 0}
+            views={0}
             class:list="onload-animation"
             style={`animation-delay: calc(var(--content-delay) + ${delay++ * interval}ms);`}
         ></PostCard>
     ))}
 </div>
+
+<script define:vars={{ postUrls, counterUrl: import.meta.env.PUBLIC_COUNTER_URL, enablePostViews: siteConfig.enablePostViews }}>
+    // 使用全局变量来防抖
+    if (!window.postPageViewsState) {
+        window.postPageViewsState = {
+            isUpdating: false,
+            debounceTimer: null
+        };
+    }
+
+    // 批量获取阅读数
+    async function getBatchPostViews(urls) {
+        try {
+            const res = await fetch(`${counterUrl}/batch`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(urls),
+            });
+            if (!res.ok) throw new Error("Failed to fetch batch post views");
+            return await res.json();
+        } catch (error) {
+            console.error('Failed to fetch batch post views:', error);
+            return {};
+        }
+    }
+
+    // 更新页面中的访问量显示
+    async function updatePostViews() {
+        if (!enablePostViews || !postUrls || postUrls.length === 0) {
+            return;
+        }
+
+        // 如果正在更新，则忽略这次调用
+        if (window.postPageViewsState.isUpdating) {
+            return;
+        }
+
+        // 检查当前页面是否有对应的访问量元素，如果没有则不进行更新
+        const hasPostViewsElements = document.querySelector('[data-post-views]');
+        if (!hasPostViewsElements) {
+            return; // 当前页面没有需要更新的访问量元素
+        }
+
+        // 清除之前的防抖定时器
+        if (window.postPageViewsState.debounceTimer) {
+            clearTimeout(window.postPageViewsState.debounceTimer);
+        }
+
+        // 设置1秒防抖
+        window.postPageViewsState.debounceTimer = setTimeout(async () => {
+            window.postPageViewsState.isUpdating = true;
+
+            try {
+                const postViews = await getBatchPostViews(postUrls);
+                
+                // 使用 data-url 属性直接查找对应的访问量元素并更新
+                Object.entries(postViews).forEach(([url, views]) => {
+                    const viewsElement = document.querySelector(`[data-post-views][data-url="${url}"]`);
+                    if (viewsElement && typeof views === 'number') {
+                        viewsElement.textContent = views.toString();
+                    }
+                });
+            } catch (error) {
+                console.error('Failed to update post views:', error);
+            } finally {
+                window.postPageViewsState.isUpdating = false;
+            }
+        }, 1000);
+    }
+
+    // 页面加载完成时更新访问量
+    document.addEventListener('DOMContentLoaded', updatePostViews);
+    
+    // 监听 Astro 的路由变化事件（适用于 SPA 导航）
+    document.addEventListener('astro:page-load', updatePostViews);
+</script>

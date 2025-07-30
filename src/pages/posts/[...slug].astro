@@ -44,22 +44,6 @@ const jsonLd = {
 		: siteConfig.lang.replace("_", "-"),
 	// TODO include cover image here
 };
-
-async function getPostViews(slug: string): Promise<number> {
-	const url = `${import.meta.env.PUBLIC_COUNTER_URL}${getPostUrlBySlug(slug)}`;
-	return await fetch(url, {
-		method: "POST",
-		headers: {
-			"Content-Type": "application/json",
-		},
-	}).then(async (response) => {
-		if (!response.ok) {
-			throw new Error("Failed to fetch post views");
-		}
-		const data: { views: number } = await response.json();
-		return data.views;
-	});
-}
 ---
 <MainGridLayout banner={entry.data.image} title={entry.data.title} description={entry.data.description} lang={entry.data.lang} setOGTypeArticle={true} headings={headings}>
     <script is:inline slot="head" type="application/ld+json" set:html={JSON.stringify(jsonLd)}></script>
@@ -90,7 +74,7 @@ async function getPostViews(slug: string): Promise<number> {
                             <Icon name="material-symbols:visibility-outline-rounded"></Icon>
                         </div>
                         <div class="text-sm">
-                            {await getPostViews(entry.slug)} {" " + i18n(I18nKey.viewsCount)}
+                            <span id="post-views">0</span> {" " + i18n(I18nKey.viewsCount)}
                         </div>
                     </div>
                 )}
@@ -161,3 +145,150 @@ async function getPostViews(slug: string): Promise<number> {
     </div>
 
 </MainGridLayout>
+
+<script define:vars={{ 
+    postSlug: entry.slug, 
+    counterUrl: import.meta.env.PUBLIC_COUNTER_URL, 
+    enablePostViews: siteConfig.enablePostViews,
+    postUrl: getPostUrlBySlug(entry.slug)
+}}>
+    // 使用全局变量来防抖
+    if (!window.postDetailViewsState) {
+        window.postDetailViewsState = {
+            isUpdating: false,
+            debounceTimer: null
+        };
+    }
+
+    // 获取并更新文章访问量
+    async function getAndUpdatePostViews() {
+        if (!enablePostViews) {
+            return;
+        }
+
+        // 如果正在更新，则忽略这次调用
+        if (window.postDetailViewsState.isUpdating) {
+            return;
+        }
+
+        // 清除之前的防抖定时器
+        if (window.postDetailViewsState.debounceTimer) {
+            clearTimeout(window.postDetailViewsState.debounceTimer);
+        }
+
+        // 设置1秒防抖
+        window.postDetailViewsState.debounceTimer = setTimeout(async () => {
+            // 检查当前页面的 URL 是否匹配这篇文章的 URL
+            const currentPath = window.location.pathname;
+            if (currentPath !== postUrl) {
+                return; // 当前页面不是这篇文章，不进行更新
+            }
+
+            window.postDetailViewsState.isUpdating = true;
+
+            try {
+                // 首先尝试从 Footer 组件缓存的数据中获取访问量
+                const cachedBatchData = sessionStorage.getItem('total-post-views-cache');
+                let viewsFromCache = null;
+                
+                if (cachedBatchData) {
+                    // 如果有缓存的批量数据，尝试从中提取当前文章的访问量
+                    // 注意：这里需要从 Footer 的 batch 请求结果中提取
+                    const batchCacheKey = 'post-views-batch-cache';
+                    const batchData = sessionStorage.getItem(batchCacheKey);
+                    if (batchData) {
+                        try {
+                            const parsed = JSON.parse(batchData);
+                            viewsFromCache = parsed[postUrl];
+                        } catch (e) {
+                            console.warn('Failed to parse batch cache data:', e);
+                        }
+                    }
+                }
+
+                // 如果有缓存的访问量，直接使用
+                if (viewsFromCache !== null && typeof viewsFromCache === 'number') {
+                    const viewsElement = document.getElementById('post-views');
+                    if (viewsElement) {
+                        viewsElement.textContent = viewsFromCache.toString();
+                    }
+                    return; // 使用缓存数据，不发送新请求
+                }
+
+                // 如果没有缓存数据，发送 POST 请求来增加访问量并获取当前访问量
+                const url = `${counterUrl}${postUrl}`;
+                const res = await fetch(url, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                });
+
+                if (!res.ok) {
+                    throw new Error("Failed to fetch post views");
+                }
+
+                const data = await res.json();
+                const viewsElement = document.getElementById('post-views');
+                if (viewsElement && typeof data.views === 'number') {
+                    viewsElement.textContent = data.views.toString();
+                }
+            } catch (error) {
+                console.error('Failed to fetch post views:', error);
+                // 失败时保持默认值 0
+            } finally {
+                window.postDetailViewsState.isUpdating = false;
+            }
+        }, 1000);
+    }
+
+    // 立即从缓存中读取并显示访问量
+    function loadViewsFromCache() {
+        if (!enablePostViews) {
+            return;
+        }
+
+        const viewsElement = document.getElementById('post-views');
+        if (!viewsElement) {
+            return;
+        }
+
+        // 尝试从 Footer 的批量缓存中获取数据
+        const batchData = sessionStorage.getItem('post-views-batch-cache');
+        if (batchData) {
+            try {
+                const parsed = JSON.parse(batchData);
+                const cachedViews = parsed[postUrl];
+                if (typeof cachedViews === 'number') {
+                    viewsElement.textContent = cachedViews.toString();
+                    return; // 成功从缓存加载，无需继续
+                }
+            } catch (e) {
+                console.warn('Failed to parse batch cache data:', e);
+            }
+        }
+    }
+
+    // 立即尝试从缓存加载数据
+    loadViewsFromCache();
+
+    // 使用更简洁的事件监听，主要依赖 Footer 的全局轮询
+    document.addEventListener('DOMContentLoaded', () => {
+        loadViewsFromCache();
+        getAndUpdatePostViews();
+    });
+    
+    // 监听 Astro 的路由变化事件（备用）
+    document.addEventListener('astro:page-load', () => {
+        loadViewsFromCache();
+        getAndUpdatePostViews();
+    });
+
+    // 监听 popstate 事件（浏览器前进/后退，备用）
+    window.addEventListener('popstate', () => {
+        setTimeout(() => {
+            loadViewsFromCache();
+            getAndUpdatePostViews();
+        }, 100);
+    });
+</script>

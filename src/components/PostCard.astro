@@ -90,7 +90,7 @@ const { remarkPluginFrontmatter } = await entry.render();
                         <Icon name="material-symbols:visibility-outline-rounded"></Icon>
                     </div>
                     <div class="text-sm">
-                        {views} {" " + i18n(I18nKey.viewsCount)}
+                        <span data-post-views data-url={url}>{views}</span> {" " + i18n(I18nKey.viewsCount)}
                     </div>
                 </div>
             )}
