@@ -43,6 +43,12 @@ export const siteConfig: SiteConfig = {
 	enablePostViews: true, // Enable post views count
 };
 
+// is dev mode
+export const isDev = import.meta.env.DEV;
+if (isDev) {
+	siteConfig.enablePostViews = false; // Disable post views count in dev mode
+}
+
 export const navBarConfig: NavBarConfig = {
 	links: [
 		LinkPreset.Home,
