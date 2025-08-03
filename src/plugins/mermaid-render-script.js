@@ -180,9 +180,8 @@
 	}
 
 	if (typeof window.mermaid === "undefined") {
-		// 动态加载 Mermaid 库 - 使用 CDN 链接
 		const script = document.createElement("script");
-		script.src = "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js";
+		script.src = "/js/mermaid.js";
 		script.onload = () => {
 			initializeMermaid();
 		};
