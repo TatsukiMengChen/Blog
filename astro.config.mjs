@@ -34,6 +34,24 @@ export default defineConfig({
 	server: {
 		allowedHosts: ["remote.mimeng.top"],
 	},
+	image: {
+		service: {
+			entrypoint: "astro/assets/services/sharp",
+			config: {
+				// 默认图片格式优先级
+				formats: ["avif", "webp", "jpeg"],
+				// 图片质量设置
+				quality: {
+					avif: 80,
+					webp: 80,
+					jpeg: 85,
+					png: 85,
+				},
+				// 启用渐进式加载
+				progressive: true,
+			},
+		},
+	},
 	integrations: [
 		tailwind({
 			nesting: true,
