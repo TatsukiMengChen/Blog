@@ -10,8 +10,20 @@ interface Props {
 	basePath?: string;
 }
 
-import { Image } from "astro:assets";
+import { getImage, Image } from "astro:assets";
 import { url } from "../../utils/url-utils";
+
+interface ImageFormat {
+	src: string;
+	type: string;
+	format: string;
+}
+
+interface ImageFormats {
+	availableFormats: ImageFormat[];
+	fallbackSrc: string;
+	fallbackFormat: string;
+}
 
 const { id, src, alt, position = "center", basePath = "/" } = Astro.props;
 const className = Astro.props.class;
@@ -46,9 +58,120 @@ if (isLocal) {
 
 const imageClass = "w-full h-full object-cover";
 const imageStyle = `object-position: ${position}`;
+
+// 检查图片URL是否存在
+async function checkImageExists(url: string): Promise<boolean> {
+	try {
+		const response = await fetch(url, { method: "HEAD" });
+		return response.ok;
+	} catch {
+		return false;
+	}
+}
+
+// 生成不同格式的图片并检查是否存在
+async function generateImageFormats(image: ImageMetadata) {
+	const formats = [
+		{ name: "avif", type: "image/avif" },
+		{ name: "webp", type: "image/webp" },
+		{ name: "jpeg", type: "image/jpeg" },
+		{ name: "png", type: "image/png" },
+	];
+
+	const availableFormats = [];
+
+	// 按照优先级顺序生成并检查每种格式
+	for (const format of formats) {
+		try {
+			const optimizedImage = await getImage({
+				src: image,
+				format: format.name as any,
+				width: image.width,
+				height: image.height,
+			});
+
+			// 检查生成的图片URL是否可访问
+			const exists = await checkImageExists(optimizedImage.src);
+			if (exists) {
+				availableFormats.push({
+					src: optimizedImage.src,
+					type: format.type,
+					format: format.name,
+				});
+			}
+		} catch (error) {
+			// 如果生成失败，跳过这种格式
+			console.warn(`Failed to generate ${format.name} format:`, error);
+		}
+	}
+
+	// 检查原始图片是否是 jpg/jpeg 格式
+	const isJpg =
+		image.src.toLowerCase().endsWith(".jpg") ||
+		image.src.toLowerCase().endsWith(".jpeg");
+	const isPng = image.src.toLowerCase().endsWith(".png");
+
+	// 确定最终的降级格式
+	let fallbackFormat = "original";
+	if (availableFormats.length > 0) {
+		fallbackFormat = availableFormats[availableFormats.length - 1].format;
+	} else if (isJpg) {
+		fallbackFormat = "jpeg";
+	} else if (isPng) {
+		fallbackFormat = "png";
+	}
+
+	return {
+		availableFormats,
+		// 如果没有任何可用的格式，使用原始图片
+		fallbackSrc:
+			availableFormats.length > 0
+				? availableFormats[availableFormats.length - 1].src
+				: image.src,
+		fallbackFormat: fallbackFormat,
+	};
+}
+
+let imageFormats: ImageFormats = {
+	availableFormats: [],
+	fallbackSrc: "",
+	fallbackFormat: "jpeg",
+};
+if (isLocal && img) {
+	imageFormats = await generateImageFormats(img);
+}
 ---
 <div id={id} class:list={[className, 'overflow-hidden relative']}>
     <div class="transition absolute inset-0 dark:bg-black/10 bg-opacity-50 pointer-events-none"></div>
-    {isLocal && img && <Image src={img} alt={alt || ""} class={imageClass} style={imageStyle} format="avif" loading="lazy" decoding="async"/>}
-    {!isLocal && <img src={isPublic ? url(src) : src} alt={alt || ""} class={imageClass} style={imageStyle}/>}
+    {isLocal && img && (
+        <picture>
+            {imageFormats.availableFormats.map((format) => (
+                <source 
+                    srcset={format.src} 
+                    type={format.type} 
+                />
+            ))}
+            <Image 
+                src={img} 
+                alt={alt || ""} 
+                class={imageClass} 
+                style={imageStyle} 
+                format={imageFormats.fallbackFormat as any} 
+                loading="lazy" 
+                decoding="async"
+            />
+        </picture>
+    )}
+    {!isLocal && (
+        <picture>
+            <img 
+                src={isPublic ? url(src) : src} 
+                alt={alt || ""} 
+                class={imageClass} 
+                style={imageStyle}
+                loading="lazy"
+                decoding="async"
+            />
+        </picture>
+    )}
 </div>
