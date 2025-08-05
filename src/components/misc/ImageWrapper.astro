@@ -59,17 +59,7 @@ if (isLocal) {
 const imageClass = "w-full h-full object-cover";
 const imageStyle = `object-position: ${position}`;
 
-// 检查图片URL是否存在
-async function checkImageExists(url: string): Promise<boolean> {
-	try {
-		const response = await fetch(url, { method: "HEAD" });
-		return response.ok;
-	} catch {
-		return false;
-	}
-}
-
-// 生成不同格式的图片并检查是否存在
+// 生成不同格式的图片
 async function generateImageFormats(image: ImageMetadata) {
 	const formats = [
 		{ name: "avif", type: "image/avif" },
@@ -80,45 +70,46 @@ async function generateImageFormats(image: ImageMetadata) {
 
 	const availableFormats = [];
 
-	// 按照优先级顺序生成并检查每种格式
+	// 按照优先级顺序生成每种格式
 	for (const format of formats) {
 		try {
 			const optimizedImage = await getImage({
 				src: image,
-				format: format.name as any,
+				format: format.name as "avif" | "webp" | "jpeg" | "png",
 				width: image.width,
 				height: image.height,
 			});
 
-			// 检查生成的图片URL是否可访问
-			const exists = await checkImageExists(optimizedImage.src);
-			if (exists) {
-				availableFormats.push({
-					src: optimizedImage.src,
-					type: format.type,
-					format: format.name,
-				});
-			}
+			availableFormats.push({
+				src: optimizedImage.src,
+				type: format.type,
+				format: format.name,
+			});
 		} catch (error) {
 			// 如果生成失败，跳过这种格式
 			console.warn(`Failed to generate ${format.name} format:`, error);
 		}
 	}
 
-	// 检查原始图片是否是 jpg/jpeg 格式
-	const isJpg =
-		image.src.toLowerCase().endsWith(".jpg") ||
-		image.src.toLowerCase().endsWith(".jpeg");
-	const isPng = image.src.toLowerCase().endsWith(".png");
+	// 检查原始图片格式
+	const srcLower = image.src.toLowerCase();
+	const isJpg = srcLower.endsWith(".jpg") || srcLower.endsWith(".jpeg");
+	const isPng = srcLower.endsWith(".png");
+	const isAvif = srcLower.endsWith(".avif");
+	const isWebp = srcLower.endsWith(".webp");
 
-	// 确定最终的降级格式
-	let fallbackFormat = "original";
+	// 确定最终的降级格式 - 确保总是返回有效格式
+	let fallbackFormat = "jpeg"; // 默认使用 jpeg
 	if (availableFormats.length > 0) {
 		fallbackFormat = availableFormats[availableFormats.length - 1].format;
-	} else if (isJpg) {
-		fallbackFormat = "jpeg";
+	} else if (isAvif) {
+		fallbackFormat = "avif";
+	} else if (isWebp) {
+		fallbackFormat = "webp";
 	} else if (isPng) {
 		fallbackFormat = "png";
+	} else if (isJpg) {
+		fallbackFormat = "jpeg";
 	}
 
 	return {
@@ -156,7 +147,7 @@ if (isLocal && img) {
                 alt={alt || ""} 
                 class={imageClass} 
                 style={imageStyle} 
-                format={imageFormats.fallbackFormat as any} 
+                format={imageFormats.fallbackFormat as "avif" | "webp" | "jpeg" | "png"} 
                 loading="lazy" 
                 decoding="async"
             />
