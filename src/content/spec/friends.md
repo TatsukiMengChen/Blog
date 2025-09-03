@@ -15,13 +15,6 @@ friends: [
         url: "https://caicaiis.github.io"
     },
     {
-        avatar: "https://avatars.githubusercontent.com/u/178153638",
-        name: "茄子",
-        desc: "一只茄子",
-        tags: ["男神", "🍆"],
-        url: "https://auberginewly.site"
-    },
-    {
         avatar: "https://avatars.githubusercontent.com/u/177809507",
         name: "回归天空",
         desc: "为什么跟女生交流的时候没有选项！！！",
