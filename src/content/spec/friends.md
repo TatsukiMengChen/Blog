@@ -20,6 +20,13 @@ friends: [
         desc: "为什么跟女生交流的时候没有选项！！！",
         tags: ["Galgame","二次元", "Bot 爱好者"],
         url: "https://sxp-simon.github.io/HelianNuits"
+    },
+    {
+        avatar: "https://blog.xiaban.run/static-images/avatar.png",
+        name: "Ryan's Blog",
+        desc: "回首向来萧瑟处,归去,也无风雨也无晴",
+        tags: ["前端", "下班就跑"],
+        url: "https://blog.xiaban.run"
     }
 ]
 title: "Friends"
