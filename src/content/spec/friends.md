@@ -27,6 +27,13 @@ friends: [
         desc: "回首向来萧瑟处,归去,也无风雨也无晴",
         tags: ["前端", "下班就跑"],
         url: "https://blog.xiaban.run"
+    },
+    {
+        avatar: "https://avatars.githubusercontent.com/u/151366823?v=4",
+        name: "PurplePlanen",
+        desc: "二次元/前端站",
+        tags: ["FE learner"],
+        url: "https://Purpleplanen.top",
     }
 ]
 title: "Friends"
