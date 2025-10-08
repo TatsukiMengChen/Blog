@@ -71,7 +71,7 @@ export const profileConfig: ProfileConfig = {
 		{
 			name: "GitHub",
 			icon: "fa6-brands:github",
-			url: "https://github.com/TatsuiMengChen",
+			url: "https://github.com/TatsukiMengChen",
 		},
 		{
 			name: "哔哩哔哩",
