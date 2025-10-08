@@ -8,6 +8,8 @@ category: Agent
 draft: false
 ---
 
+> 深度剖析 Claude Code 的设计哲学与核心架构，从零开始构建一个生产级的代码原生 AI 代理。本文涵盖规划器-执行器模型、针对代码优化的 RAG、LangGraph 状态机以及 Docker 安全沙箱等关键技术。
+
 :::important[免责声明]
 本文由 AI 协作于国庆假期耗时约 8 天，整理了大量资料并总结内容进行编写，本人仅做了初步的内容验证，请您自行分辨其中内容的真伪。
 :::
@@ -115,13 +117,13 @@ class AgentState(TypedDict):
     plan: List[str]
     
     # 已执行步骤及其结果的历史记录，用于重新规划
-    past_steps: Annotated], operator.add]
+    past_steps: Annotated[List[Tuple[str, str]], operator.add]
     
     # 返回给用户的最终响应
     response: str
     
     # 我们还可以为执行器子代理添加消息历史记录
-    messages: Annotated, operator.add]
+    messages: Annotated[List[BaseMessage], operator.add]
 ```
 
 带有 `operator.add` 的 `Annotated` 类型是 LangGraph 的一个特性，它确保当一个节点为 `past_steps` 或 `messages` 返回一个值时，该值会被附加到现有列表中，而不是覆盖它，从而允许状态随时间累积[8](https://www.langchain.com/langgraph)。
@@ -356,7 +358,7 @@ class Response(BaseModel):
 
 class Act(BaseModel):
     """下一步要采取的行动。"""
-    action: Union = Field(
+    action: Union[Response, Plan] = Field(
         description="要执行的行动。使用 'Response' 回复用户，或使用 'Plan' 继续执行新计划。"
     )
 
@@ -574,7 +576,7 @@ def execute_bash(command: str) -> str:
         # 检查沙箱容器是否正在运行
         try:
             container = client.containers.get(SANDBOX_CONTAINER_NAME)
-            if container.status!= "running":
+            if container.status != "running":
                 container.start()
         except docker.errors.NotFound:
             # 未找到容器，因此创建并启动它
@@ -636,9 +638,9 @@ from langgraph.graph import StateGraph, END, START
 class AgentState(TypedDict):
     input: str
     plan: List[str]
-    past_steps: Annotated], operator.add]
+    past_steps: Annotated[List[Tuple[str, str]], operator.add]
     response: str
-    messages: Annotated, operator.add]
+    messages: Annotated[List[BaseMessage], operator.add]
 
 # --- 2. 构建图 ---
 def build_agent_graph():
@@ -687,7 +689,7 @@ async def main():
     print(f"--- 正在执行任务: {args.task} ---")
     
     # 运行代理
-    initial_state = {"input": args.task, "past_steps":, "messages":}
+    initial_state = {"input": args.task, "past_steps": [], "messages": []}
     
     async for event in agent_app.astream(initial_state):
         for key, value in event.items():
@@ -711,7 +713,7 @@ if __name__ == "__main__":
 
 **执行追踪：**
 
-1. **初始状态：** 用户运行 `python main.py "The requirements.txt file..."`。初始状态为 `{"input": "The requirements.txt...", "past_steps":}`。
+1. **初始状态：** 用户运行 `python main.py "The requirements.txt file..."`。初始状态为 `{"input": "The requirements.txt...", "past_steps": []}`。
 2. **规划器节点输出：** 图从 `planner_node` 开始。规划器 LLM 接收目标并生成一个计划。
    - **新状态：** `{"plan": ["1. 读取 requirements.txt 的内容。", "2. 识别 pandas 的当前版本。", "3. 将 pandas 的版本更新为最新版本。", "4. 安装更新后的依赖项。", "5. 运行测试套件以验证更改。"]}`
 3. **执行器节点（迭代 1）：** 图移动到 `executor_node`。它执行第一步，“读取 requirements.txt 的内容”，并调用 `read_file` 工具。
