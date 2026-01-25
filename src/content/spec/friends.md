@@ -34,6 +34,20 @@ friends: [
         desc: "二次元/前端站",
         tags: ["FE learner"],
         url: "https://Purpleplanen.top",
+    },
+    {
+        avatar: "https://mrsibe.top/images/avatar-128.jpg",
+        name: "西贝的代码宇宙",
+        desc: "在星辰与字节之间，写下一行属于宇宙的代码。",
+        tags: ["后端", "开源", "天文"],
+        url: "https://mrsibe.top/"
+    },
+    {
+        avatar: "https://avatars.githubusercontent.com/u/37870767",
+        name: "Soulter's Blog",
+        desc: "The world is your canvas!",
+        tags: ["Tech", "ACG", "Life"],
+        url: "https://blog.soulter.top"
     }
 ]
 title: "Friends"
